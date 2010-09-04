@@ -14,7 +14,7 @@ try:
 except:
     import StringIO
 
-DEBUG = False
+DEBUG = True
 
 # setup connection handler
 # sender_id is automatically generated 
@@ -70,28 +70,40 @@ def wsgi_server(application):
         
         # Set a couple of environment attributes a.k.a. header attributes 
         # that are a must according to PEP 333
-        environ = req.headers
+        req.headers = dict((key.encode('ascii'), value.encode('ascii')) for (key,value) in req.headers.items())
+        environ = {}
         environ['SERVER_PROTOCOL'] = 'HTTP/1.1' # SimpleHandler expects a server_protocol, lets assume it is HTTP 1.1
-        environ['REQUEST_METHOD'] = environ['METHOD']
-        if ':' in environ['Host']:
-            environ['SERVER_NAME'] = environ['Host'].split(':')[0]
-            environ['SERVER_PORT'] = environ['Host'].split(':')[1]
+        environ['REQUEST_METHOD'] = req.headers['METHOD']
+        if ':' in req.headers['Host']:
+            environ['SERVER_NAME'] = req.headers['Host'].split(':')[0]
+            environ['SERVER_PORT'] = req.headers['Host'].split(':')[1]
         else:
-            environ['SERVER_NAME'] = environ['Host']
+            environ['SERVER_NAME'] = req.headers['Host']
             environ['SERVER_PORT'] = ''
         environ['SCRIPT_NAME'] = '' # empty for now
 		# 26 aug 2010: Apparently Mongrel2 has started (around 1.0beta1) to quote urls and
 		# apparently Django isn't expecting an already quoted string. So, I just
 		# unquote the path_info here again so Django doesn't throw a "page not found" on 
 		# urls with spaces and other characters in it.
-        environ['PATH_INFO'] = urllib.unquote(environ['PATH'])
-        if '?' in environ['URI']:
-            environ['QUERY_STRING'] = environ['URI'].split('?')[1]
+        environ['PATH_INFO'] = urllib.unquote(req.headers['PATH'])
+        if '?' in req.headers['URI']:
+            environ['QUERY_STRING'] = req.headers['URI'].split('?')[1]
         else:
             environ['QUERY_STRING'] = ''
-        if environ.has_key('Content-Length'):
-            environ['CONTENT_LENGTH'] = environ['Content-Length'] # necessary for POST to work with Django
+        if req.headers.has_key('Content-Length'):
+            environ['CONTENT_LENGTH'] = req.headers['Content-Length'] # necessary for POST to work with Django
         environ['wsgi.input'] = req.body
+        
+        for k,v in req.headers.items():
+            k=k.replace('-','_').upper(); v=v.strip()
+            if k in environ:
+                continue                    # skip content length, type,etc.
+            http_k = 'HTTP_'+k
+            if http_k in environ:
+                environ[http_k] += ','+v     # comma-separate multiple headers
+            else:
+                environ[http_k] = v
+        
         
         if DEBUG: print "ENVIRON: %r\n" % environ
         
@@ -133,27 +145,13 @@ def wsgi_server(application):
         conn.reply_http(req, data, code = code, status = status, headers = headers)
 
 if __name__ == "__main__":
-    
-    # Simple WSGI application
-    simple_application = simple_app
-
-    # Simple WSGI application with utf-8 response
-    simple_utf8_application = simple_app_utf8
-    
-    # WSGI Test page
-    import test_wsgi_app
-    wsgi_test_application = test_wsgi_app.application
-    
     # Django demo app
-    sys.path.append('/home/berry/git/django/')
-    sys.path.append('/home/berry/git/')
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'djangodemo.settings'
+    #sys.path.append('/home/berry/git/django/')
+    sys.path.append('..')
+    os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
     
     import django.core.handlers.wsgi
     django_application = django.core.handlers.wsgi.WSGIHandler()
     
     # Start WSGI application
-    # wsgi_server(simple_application)
-    # wsgi_server(simple_utf8_application)
-    # wsgi_server(wsgi_test_application)
     wsgi_server(django_application)

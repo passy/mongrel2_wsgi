@@ -1,6 +1,8 @@
 Mongrel 2 WSGI Handler
 ----------------------
 
+Forked from Berry's original WSGI handler work. Much thanks! (http://github.com/berry/).
+
 Installation
 ============
 

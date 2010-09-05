@@ -14,7 +14,7 @@ try:
 except:
     import StringIO
 
-DEBUG = True
+DEBUG = False
 
 # setup connection handler
 # sender_id is automatically generated 
@@ -22,24 +22,6 @@ DEBUG = True
 conn = handler.Connection(str(uuid4()), 
         "tcp://127.0.0.1:9997",
         "tcp://127.0.0.1:9996")
-
-def simple_app(environ, start_response):
-    """Simplest possible WSGI application object"""
-    status = '200 OK'
-    response_headers = [('Content-type','text/plain')]
-    start_response(status, response_headers)
-    return ['Hello world!\n' for i in range(100)]
-
-def encode_response(data, encoding='utf-8'):
-    '''Data is a list of strings'''
-    return [d.encode(encoding) for d in data]
-
-def simple_app_utf8(environ, start_response):
-    """Simplest possible WSGI application object with UTF-8"""
-    status = '200 OK'
-    response_headers = [('Content-type','text/plain; charset=utf-8')]
-    start_response(status, response_headers)
-    return encode_response([u'Héllo wörld!\n' for i in range(100)])
 
 def wsgi_server(application):
     '''WSGI handler based on the Python wsgiref SimpleHandler.
@@ -143,15 +125,3 @@ def wsgi_server(application):
             if DEBUG: print "ERRORS: %r" % errors
             data = "%s\r\n\r\n%s" % (data, errors)            
         conn.reply_http(req, data, code = code, status = status, headers = headers)
-
-if __name__ == "__main__":
-    # Django demo app
-    #sys.path.append('/home/berry/git/django/')
-    sys.path.append('..')
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'settings'
-    
-    import django.core.handlers.wsgi
-    django_application = django.core.handlers.wsgi.WSGIHandler()
-    
-    # Start WSGI application
-    wsgi_server(django_application)

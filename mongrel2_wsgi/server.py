@@ -5,7 +5,6 @@ import os, sys
 import urllib
 from uuid import uuid4
 
-from mongrel2 import handler
 import json
 
 from wsgiref.handlers import SimpleHandler
@@ -16,14 +15,10 @@ except:
 
 DEBUG = False
 
-# setup connection handler
-# sender_id is automatically generated 
-# so that each handler instance is uniquely identified
-conn = handler.Connection(str(uuid4()), 
-        "tcp://127.0.0.1:9997",
-        "tcp://127.0.0.1:9996")
+def random_uuid():
+    return str(uuid4())
 
-def wsgi_server(application):
+def wsgi_server(application, conn):
     '''WSGI handler based on the Python wsgiref SimpleHandler.
     
     A WSGI application should return a iterable op StringTypes. 
@@ -39,6 +34,10 @@ def wsgi_server(application):
     # for Mongrel2 doesn't seem to support file-like stream objects for requests 
     # and responses. Unless I have missed something.
     
+    # setup connection handler
+    # sender_id is automatically generated 
+    # so that each handler instance is uniquely identified
+
     while True:
         if DEBUG: print "WAITING FOR REQUEST"
         
@@ -96,8 +95,8 @@ def wsgi_server(application):
         respIO = StringIO.StringIO()
         
         # execute the application
-        handler = SimpleHandler(reqIO, respIO, errIO, environ, multithread = False, multiprocess = False)
-        handler.run(application)
+        simple_handler = SimpleHandler(reqIO, respIO, errIO, environ, multithread = False, multiprocess = False)
+        simple_handler.run(application)
         
         # Get the response and filter out the response (=data) itself,
         # the response headers, 

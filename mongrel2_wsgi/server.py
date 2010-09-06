@@ -110,11 +110,20 @@ def wsgi_server(application, conn):
         
         response = respIO.getvalue()
         errors = errIO.getvalue()
-        
-        response = 'HTTP/1.1' + response[len('HTTP/1.1'):]
-    
+
         # return the response
         if DEBUG: print "RESPONSE: %r\n" % response
         if errors:
             if DEBUG: print "ERRORS: %r" % errors
+        
         conn.reply(req, response)
+        
+        respIO.seek(0)
+        
+        protocol = respIO.readline()[:8]
+        msg = httplib.HTTPMessage(respIO, 0)
+        http_1point1 = protocol == 'HTTP/1.1'
+        
+        if (http_1point1 and msg.getheader("Connection") == "close") or msg.getheader("Connection") != "Keep-Alive":
+            if DEBUG: print "EXPLICITLY CLOSING CONNECTION"
+            conn.reply(req, "")

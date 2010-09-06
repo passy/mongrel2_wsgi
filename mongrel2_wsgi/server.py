@@ -2,21 +2,32 @@
 # -*- coding: utf-8 -*-
 
 import os, sys
-import urllib
+import urllib, httplib
 from uuid import uuid4
 
 import json
 
 from wsgiref.handlers import SimpleHandler
 try:
-    import cStringIO as StringIO
+    from cStringIO import StringIO
 except:
-    import StringIO
+    from StringIO import StringIO
 
-DEBUG = False
+DEBUG = True
 
 def random_uuid():
     return str(uuid4())
+    
+def read_status(line):
+    try:
+        version, status, reason = line.split(None, 2)
+    except ValueError:
+        try:
+            version, status = line.split(None, 1)
+            reason = ""
+        except ValueError:
+            version, status, reason = line, "", ""
+    return version, status, reason
 
 def wsgi_server(application, conn):
     '''WSGI handler based on the Python wsgiref SimpleHandler.
@@ -53,7 +64,7 @@ def wsgi_server(application, conn):
         # that are a must according to PEP 333
         req.headers = dict((key.encode('ascii'), value.encode('ascii')) for (key,value) in req.headers.items())
         env = {}
-        env['SERVER_PROTOCOL'] = 'HTTP/1.1' # SimpleHandler expects a server_protocol, lets assume it is HTTP 1.1
+        env['SERVER_PROTOCOL'] = 'HTTP/1.1'
         env['REQUEST_METHOD'] = req.headers['METHOD']
         if ':' in req.headers['Host']:
             env['SERVER_NAME'] = req.headers['Host'].split(':')[0]
@@ -85,66 +96,25 @@ def wsgi_server(application, conn):
             else:
                 env[http_k] = v
         
-        
         if DEBUG: print "ENVIRON: %r\n" % env
         
         # SimpleHandler needs file-like stream objects for
         # requests, errors and reponses
-        reqIO = StringIO.StringIO(req.body)
-        errIO = StringIO.StringIO()
-        respIO = StringIO.StringIO()
+        reqIO = StringIO(req.body)
+        errIO = StringIO()
+        respIO = StringIO()
         
         # execute the application
         simple_handler = SimpleHandler(reqIO, respIO, errIO, env, multithread = False, multiprocess = False)
         simple_handler.run(application)
         
-        class Response(object):
-            def start_response(status, headers, exc_info=None):
-                if exc_info is not None:
-                    raise exc_info[0], exc_info[1], exc_info[2]
-                captured[:] = [status, headers, exc_info]
-                return output.append
-                
-        
-        captured = []
-        output = []
-
-        app_iter = application(self.env, start_response)
-        if output or not captured:
-            try:
-                output.extend(app_iter)
-            finally:
-                if hasattr(app_iter, 'close'):
-                    app_iter.close()
-            app_iter = output
-        if catch_exc_info:
-            return (captured[0], captured[1], app_iter, captured[2])
-        else:
-            return (captured[0], captured[1], app_iter)
-        
-        # Get the response and filter out the response (=data) itself,
-        # the response headers, 
-        # the response status code and the response status description
         response = respIO.getvalue()
-        response = response.split("\r\n")
-        data = response[-1]
-        headers = dict([r.split(": ") for r in response[1:-2]])
-        code = response[0][9:12]
-        status = response[0][13:]
-        
-        # strip BOM's from response data
-        # Especially the WSGI handler from Django seems to generate them (2 actually, huh?)
-        # a BOM isn't really necessary and cause HTML parsing errors in Chrome and Safari
-        # See also: http://www.xs4all.nl/~mechiel/projects/bomstrip/
-        # Although I still find this a ugly hack, it does work.
-        data = data.replace('\xef\xbb\xbf', '')
-        
-        # Get the generated errors
         errors = errIO.getvalue()
         
+        response = 'HTTP/1.1' + response[len('HTTP/1.1'):]
+    
         # return the response
         if DEBUG: print "RESPONSE: %r\n" % response
         if errors:
             if DEBUG: print "ERRORS: %r" % errors
-            data = "%s\r\n\r\n%s" % (data, errors)            
-        conn.reply_http(req, data, code = code, status = status, headers = headers)
+        conn.reply(req, response)

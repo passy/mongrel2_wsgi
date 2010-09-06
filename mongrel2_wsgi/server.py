@@ -28,6 +28,17 @@ def read_status(line):
         except ValueError:
             version, status, reason = line, "", ""
     return version, status, reason
+    
+def add_cgi_headers(env, req):
+    for k,v in req.headers.items():
+        k=k.replace('-','_').upper(); v=v.strip()
+        if k in env:
+            continue                    # skip content length, type,etc.
+        http_k = 'HTTP_'+k
+        if http_k in env:
+            env[http_k] += ','+v     # comma-separate multiple headers
+        else:
+            env[http_k] = v
 
 def wsgi_server(application, conn):
     '''WSGI handler based on the Python wsgiref SimpleHandler.
@@ -86,15 +97,7 @@ def wsgi_server(application, conn):
             env['CONTENT_LENGTH'] = req.headers['Content-Length'] # necessary for POST to work with Django
         env['wsgi.input'] = req.body
         
-        for k,v in req.headers.items():
-            k=k.replace('-','_').upper(); v=v.strip()
-            if k in env:
-                continue                    # skip content length, type,etc.
-            http_k = 'HTTP_'+k
-            if http_k in env:
-                env[http_k] += ','+v     # comma-separate multiple headers
-            else:
-                env[http_k] = v
+        add_cgi_headers(env, req)
         
         if DEBUG: print "ENVIRON: %r\n" % env
         

@@ -14,7 +14,7 @@ try:
 except:
     from StringIO import StringIO
 
-DEBUG = True
+DEBUG = False
 
 def random_uuid():
     return str(uuid4())

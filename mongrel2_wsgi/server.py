@@ -105,8 +105,6 @@ def wsgi_server(application, conn):
         env['SCRIPT_NAME'] = '' # Also stupid.
         env['SERVER_NAME'], env['SERVER_PORT'] = parse_host(req.headers['Host'])
         env['SERVER_SOFTWARE'] = 'mongrel2_wsgi'
-                    
-        env['wsgi.input'] = req.body
         
         add_cgi_headers(env, req)
         

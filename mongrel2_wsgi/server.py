@@ -30,8 +30,8 @@ def read_status(line):
             version, status, reason = line, "", ""
     return version, status, reason
     
-def add_cgi_headers(env, req):
-    for k,v in req.headers.items():
+def add_http_variables(env, headers):
+    for k,v in headers.items():
         k=k.replace('-','_').upper(); v=v.strip()
         if k in env:
             continue                    # skip content length, type,etc.
@@ -41,12 +41,31 @@ def add_cgi_headers(env, req):
         else:
             env[http_k] = v
             
+def add_request_metavariables(env, headers):
+    # From rfc3875
+    if headers.has_key('Content-Length'):
+        env['CONTENT_LENGTH'] = headers['Content-Length']
+
+    if headers.has_key('Content-Type'):
+        env['CONTENT_TYPE'] = headers['Content-Type']
+    
+    env['GATEWAY_INTERFACE'] = "CGI/1.1"
+    env['PATH_INFO'] = urllib.unquote(headers['PATH'])
+    # PATH_TRANSLATED is stupid.
+    env['QUERY_STRING'] = urlparse(headers['URI']).query
+    env['SERVER_PROTOCOL'] = 'HTTP/1.1'
+    env['REMOTE_ADDR'] = '' # Not currently being sent from Mongrel2. 
+    # REMOTE_HOST is stupid.
+    env['REQUEST_METHOD'] = headers['METHOD']
+    env['SCRIPT_NAME'] = '' # Also stupid.
+    env['SERVER_NAME'], env['SERVER_PORT'] = parse_host(headers['Host'])
+    env['SERVER_SOFTWARE'] = 'mongrel2_wsgi'
+            
 def parse_host(host):
     if ':' in host:
         return host.split(':', 1)
     else:
         return host, '80'
-    
 
 def wsgi_server(application, conn):
     '''WSGI handler based on the Python wsgiref SimpleHandler.
@@ -82,31 +101,12 @@ def wsgi_server(application, conn):
             continue #effectively ignore the disconnect from the client
         
         # json parsing gives us unicode instead of ascii.
-        req.headers = dict((key.encode('ascii'), value.encode('ascii')) for (key,value) in req.headers.items())
-        url = urlparse(req.headers['URI'])
+        headers = dict((key.encode('ascii'), value.encode('ascii')) for (key,value) in req.headers.items())
         
-        # Setup CGI/WSGI Request Meta-Variables, rfc3875
         env = {}
         
-        if req.headers.has_key('Content-Length'):
-            env['CONTENT_LENGTH'] = req.headers['Content-Length']
-
-        if req.headers.has_key('Content-Type'):
-            env['CONTENT_TYPE'] = req.headers['Content-Type']
-            
-        env['GATEWAY_INTERFACE'] = "CGI/1.1"
-        env['PATH_INFO'] = urllib.unquote(req.headers['PATH'])
-        # PATH_TRANSLATED is stupid.
-        env['QUERY_STRING'] = url.query
-        env['SERVER_PROTOCOL'] = 'HTTP/1.1'
-        env['REMOTE_ADDR'] = '' # Not currently being sent from Mongrel2. 
-        # REMOTE_HOST is stupid.
-        env['REQUEST_METHOD'] = req.headers['METHOD']
-        env['SCRIPT_NAME'] = '' # Also stupid.
-        env['SERVER_NAME'], env['SERVER_PORT'] = parse_host(req.headers['Host'])
-        env['SERVER_SOFTWARE'] = 'mongrel2_wsgi'
-        
-        add_cgi_headers(env, req)
+        add_request_metavariables(env, headers)
+        add_http_variables(env, headers)
         
         if DEBUG: print "ENVIRON: %r\n" % env
         

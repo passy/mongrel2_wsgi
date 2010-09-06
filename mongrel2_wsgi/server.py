@@ -93,8 +93,13 @@ def wsgi_server(application, conn):
             env['QUERY_STRING'] = req.headers['URI'].split('?')[1]
         else:
             env['QUERY_STRING'] = ''
+            
         if req.headers.has_key('Content-Length'):
-            env['CONTENT_LENGTH'] = req.headers['Content-Length'] # necessary for POST to work with Django
+            env['CONTENT_LENGTH'] = req.headers['Content-Length']
+            
+        if req.headers.has_key('Content-Type'):
+            env['CONTENT_TYPE'] = req.headers['Content-Type']
+            
         env['wsgi.input'] = req.body
         
         add_cgi_headers(env, req)

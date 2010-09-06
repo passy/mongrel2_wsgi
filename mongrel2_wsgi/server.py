@@ -3,6 +3,7 @@
 
 import os, sys
 import urllib, httplib
+from urlparse import urlparse
 from uuid import uuid4
 
 import json
@@ -39,6 +40,13 @@ def add_cgi_headers(env, req):
             env[http_k] += ','+v     # comma-separate multiple headers
         else:
             env[http_k] = v
+            
+def parse_host(host):
+    if ':' in host:
+        return host.split(':', 1)
+    else:
+        return host, '80'
+    
 
 def wsgi_server(application, conn):
     '''WSGI handler based on the Python wsgiref SimpleHandler.
@@ -65,41 +73,39 @@ def wsgi_server(application, conn):
         
         # receive a request
         req = conn.recv()
-        if DEBUG: print "REQUEST BODY: %r\n" % req.body
+        if DEBUG: 
+            print "REQUEST HEADERS: %r\n" % req.headers
+            print "REQUEST BODY: %r\n" % req.body
         
         if req.is_disconnect():
             if DEBUG: print "DISCONNECT"
             continue #effectively ignore the disconnect from the client
         
-        # Set a couple of envment attributes a.k.a. header attributes 
-        # that are a must according to PEP 333
+        # json parsing gives us unicode instead of ascii.
         req.headers = dict((key.encode('ascii'), value.encode('ascii')) for (key,value) in req.headers.items())
+        url = urlparse(req.headers['URI'])
+        
+        # Setup CGI/WSGI Request Meta-Variables, rfc3875
         env = {}
-        env['SERVER_PROTOCOL'] = 'HTTP/1.1'
-        env['REQUEST_METHOD'] = req.headers['METHOD']
-        if ':' in req.headers['Host']:
-            env['SERVER_NAME'] = req.headers['Host'].split(':')[0]
-            env['SERVER_PORT'] = req.headers['Host'].split(':')[1]
-        else:
-            env['SERVER_NAME'] = req.headers['Host']
-            env['SERVER_PORT'] = ''
-        env['SCRIPT_NAME'] = '' # empty for now
-		# 26 aug 2010: Apparently Mongrel2 has started (around 1.0beta1) to quote urls and
-		# apparently Django isn't expecting an already quoted string. So, I just
-		# unquote the path_info here again so Django doesn't throw a "page not found" on 
-		# urls with spaces and other characters in it.
-        env['PATH_INFO'] = urllib.unquote(req.headers['PATH'])
-        if '?' in req.headers['URI']:
-            env['QUERY_STRING'] = req.headers['URI'].split('?')[1]
-        else:
-            env['QUERY_STRING'] = ''
-            
+        
         if req.headers.has_key('Content-Length'):
             env['CONTENT_LENGTH'] = req.headers['Content-Length']
-            
+
         if req.headers.has_key('Content-Type'):
             env['CONTENT_TYPE'] = req.headers['Content-Type']
             
+        env['GATEWAY_INTERFACE'] = "CGI/1.1"
+        env['PATH_INFO'] = urllib.unquote(req.headers['PATH'])
+        # PATH_TRANSLATED is stupid.
+        env['QUERY_STRING'] = url.query
+        env['SERVER_PROTOCOL'] = 'HTTP/1.1'
+        env['REMOTE_ADDR'] = '' # Not currently being sent from Mongrel2. 
+        # REMOTE_HOST is stupid.
+        env['REQUEST_METHOD'] = req.headers['METHOD']
+        env['SCRIPT_NAME'] = '' # Also stupid.
+        env['SERVER_NAME'], env['SERVER_PORT'] = parse_host(req.headers['Host'])
+        env['SERVER_SOFTWARE'] = 'mongrel2_wsgi'
+                    
         env['wsgi.input'] = req.body
         
         add_cgi_headers(env, req)
@@ -126,12 +132,16 @@ def wsgi_server(application, conn):
         
         conn.reply(req, response)
         
+        # Check if we should close the connection.
+        
         respIO.seek(0)
         
         protocol = respIO.readline()[:8]
         msg = httplib.HTTPMessage(respIO, 0)
-        http_1point1 = protocol == 'HTTP/1.1'
+        http_1p1 = protocol == 'HTTP/1.1'
         
-        if (http_1point1 and msg.getheader("Connection") == "close") or msg.getheader("Connection") != "Keep-Alive":
+        conn_close = http_1p1 and msg.getheader("Connection") == "close"
+        keep_alive = http_1p1 or msg.getheader("Connection") == "Keep-Alive"
+        if conn_close or not keep_alive:
             if DEBUG: print "EXPLICITLY CLOSING CONNECTION"
             conn.reply(req, "")

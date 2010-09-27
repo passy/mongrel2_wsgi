@@ -4,7 +4,7 @@ try:
 except ImportError:
     from distutils.core import setup
 
-setup(name='Mongrel2 WSGI',
+setup(name='Mongrel2-WSGI',
       version='1.0',
       description='Mongrel2 (0MQ) server that runs WSGI applications.',
       maintainer='Timothy Fitz',

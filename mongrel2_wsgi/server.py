@@ -50,14 +50,15 @@ def add_request_metavariables(env, headers):
         env['CONTENT_TYPE'] = headers['Content-Type']
     
     env['GATEWAY_INTERFACE'] = "CGI/1.1"
-    env['PATH_INFO'] = urllib.unquote(headers['PATH'])
+    env['SCRIPT_NAME'] = headers['PATTERN'].split('(')[0]
+    path = urllib.unquote(headers['PATH'])[len(env['SCRIPT_NAME']):]
+    env['PATH_INFO'] = '/' + path if len(path) == 0 or path[0] != '/' else path
     # PATH_TRANSLATED is stupid.
     env['QUERY_STRING'] = urlparse(headers['URI']).query
-    env['SERVER_PROTOCOL'] = 'HTTP/1.1'
-    env['REMOTE_ADDR'] = '' # Not currently being sent from Mongrel2. 
+    env['SERVER_PROTOCOL'] = headers['VERSION']
+    env['REMOTE_ADDR'] = headers['X-Forwarded-For']
     # REMOTE_HOST is stupid.
     env['REQUEST_METHOD'] = headers['METHOD']
-    env['SCRIPT_NAME'] = '' # Also stupid.
     env['SERVER_NAME'], env['SERVER_PORT'] = parse_host(headers['Host'])
     env['SERVER_SOFTWARE'] = 'mongrel2_wsgi'
             

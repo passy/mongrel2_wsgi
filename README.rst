@@ -16,6 +16,8 @@ Add 'mongrel2_wsgi' to your INSTALLED_APPS and then you can run "python manage.p
 Other WSGI Applications
 =======================
 
-from mongrel2 import handler
-from mongrel2_wsgi import wsgi_server
-wsgi_server(my_application_object, handler.Connection(uuid, push_url, pull_url))
+::
+
+  from mongrel2 import handler
+  from mongrel2_wsgi import wsgi_server
+  wsgi_server(my_application_object, handler.Connection(uuid, push_url, pull_url))
